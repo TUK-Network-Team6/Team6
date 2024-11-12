@@ -1,0 +1,9 @@
+# 가상환경 폴더
+venv/
+# PyCharm 설정 폴더
+.idea/
+# Python 캐시 파일
+__pycache__/
+*.pyc
+# macOS 시스템 파일
+.DS_Store
