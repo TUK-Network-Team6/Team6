@@ -2,7 +2,6 @@ from scapy.all import sniff, IP, TCP, UDP, DNS, Raw, conf
 from utils import save_to_json, save_to_csv
 from datetime import datetime
 
-
 # DNS 쿼리 타입 매핑
 DNS_QUERY_TYPES = {
     1: "A",
@@ -25,123 +24,67 @@ def packet_callback(packet):
     # 현재 날짜와 시간 추가
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     packet_data['timestamp'] = timestamp
-    print(f"Time: {timestamp}")
 
-    # 기본 프로토콜 정보 추가
     if packet.haslayer(IP):
-        print("[INFO] IP Packet Detected")
         packet_data['protocol'] = 'IP'
-        src_ip = packet[IP].src
-        dst_ip = packet[IP].dst
-        packet_data['src_ip'] = src_ip
-        packet_data['dst_ip'] = dst_ip
-        print(f"Source IP: {src_ip}")
-        print(f"Destination IP: {dst_ip}")
+        packet_data['src_ip'] = packet[IP].src
+        packet_data['dst_ip'] = packet[IP].dst
 
     if packet.haslayer(TCP):
-        print("[INFO] TCP Packet Detected")
-        packet_data['protocol'] = 'TCP'
-        src_port = packet[TCP].sport
-        dst_port = packet[TCP].dport
-        seq = packet[TCP].seq
-        ack = packet[TCP].ack
-        packet_data['src_port'] = src_port
-        packet_data['dst_port'] = dst_port
-        packet_data['seq'] = seq
-        packet_data['ack'] = ack
-        print(f"Source Port: {src_port}")
-        print(f"Destination Port: {dst_port}")
-        print(f"Sequence Number: {seq}")
-        print(f"Acknowledgement Number: {ack}")
+        flags = packet[TCP].flags
+        if flags & 0x02:  # SYN 플래그
+            packet_data['tcp_flags'] = 'SYN'
+        elif flags & 0x12:  # SYN-ACK 플래그
+            packet_data['tcp_flags'] = 'SYN-ACK'
+        elif flags & 0x10:  # ACK 플래그
+            packet_data['tcp_flags'] = 'ACK'
 
-        # HTTP 데이터 분석
-        if packet[TCP].dport == 80 or packet[TCP].sport == 80:
-            print("[INFO] HTTP Data Detected")
-            packet_data['sub_protocol'] = 'HTTP'
-            if packet.haslayer(Raw):
-                http_data = packet[Raw].load.decode(errors='ignore').strip()  # HTTP 데이터 불러오기
-                packet_data['http_data'] = http_data  # 원본 데이터 저장
-                
-                # HTTP 요청 라인 분석 (예: "GET /index.html HTTP/1.1")
-                request_line = http_data.splitlines()[0] if http_data else ""
-                if request_line:
-                    parts = request_line.split()
-                    if len(parts) >= 3:
-                        method, path, version = parts[0], parts[1], parts[2]
+        packet_data['protocol'] = 'TCP'
+        packet_data['src_port'] = packet[TCP].sport
+        packet_data['dst_port'] = packet[TCP].dport
+        packet_data['seq'] = packet[TCP].seq
+        packet_data['ack'] = packet[TCP].ack
+
+        if packet.haslayer(Raw):
+            raw_data = packet[Raw].load.decode(errors='ignore')
+            if 'HTTP' in raw_data:
+                print("[INFO] HTTP Packet Detected")
+                packet_data['http_data'] = raw_data
+                if raw_data.startswith(('GET', 'POST')):
+                    try:
+                        request_line = raw_data.splitlines()[0]
+                        method, path, version = request_line.split()
                         packet_data['http_method'] = method
                         packet_data['http_path'] = path
                         packet_data['http_version'] = version
-                        print(f"[HTTP] Method: {method}")
-                        print(f"[HTTP] Version: {version}")
-                        print(f"[HTTP] Data (Filtered): {path}")
+                    except ValueError as e:
+                        print(f"[ERROR] Parsing HTTP Request Line Failed: {e}")
 
-                # HTTP 헤더 분석 (예: "Host: www.example.com")
-                headers = http_data.splitlines()[1:]  # 첫 번째 라인을 제외한 나머지
-                for header in headers:
-                    if header.startswith("Host:"):
-                        host = header.split(":", 1)[1].strip()
-                        packet_data['http_host'] = host
-                        print(f"[HTTP] Host: {host}")
-                    elif header.startswith("Connection:"):
-                        connection = header.split(":", 1)[1].strip()
-                        packet_data['http_connection'] = connection
-                        print(f"[HTTP] Connection: {connection}")
-
-
-
-        # SMTP 데이터 분석
-        if packet[TCP].dport in [25, 465, 587] or packet[TCP].sport in [25, 465, 587]:
-            print("[INFO] SMTP Data Detected")
-            packet_data['sub_protocol'] = 'SMTP'
-            # SMTP 데이터 분석
-            if packet.haslayer(Raw):
-                smtp_data = packet[Raw].load.decode(errors='ignore').strip()  # SMTP 데이터 불러오기
-                packet_data['smtp_data'] = smtp_data  # 원본 데이터 저장
-
-                mail_from = None
-                rcpt_to = None
-
-                # SMTP 명령 분석
-                lines = smtp_data.splitlines()  # 줄 단위로 분리
-                for line in lines:
-                    if line.startswith("MAIL FROM:"):
-                        mail_from = line.split("MAIL FROM:", 1)[1].strip()
-                        packet_data['smtp_mail_from'] = mail_from
-                    elif line.startswith("RCPT TO:"):
-                        rcpt_to = line.split("RCPT TO:", 1)[1].strip()
-                        packet_data['smtp_rcpt_to'] = rcpt_to
-                    else:
-                        # 나머지 데이터 출력
-                        print(f"[SMTP] Data: {line}")
-
+            # HTTP 응답 상태 추출
+            if 'HTTP/' in raw_data:
+                try:
+                    status_line = raw_data.splitlines()[0]
+                    if status_line.startswith('HTTP/'):
+                        packet_data['http_status'] = status_line
+                except IndexError:
+                    print("[DEBUG] HTTP Status Line Parsing Failed")
 
     if packet.haslayer(UDP):
-        print("[INFO] UDP Packet Detected")
         packet_data['protocol'] = 'UDP'
-        src_port = packet[UDP].sport
-        dst_port = packet[UDP].dport
-        packet_data['src_port'] = src_port
-        packet_data['dst_port'] = dst_port
-        print(f"Source Port: {src_port}")
-        print(f"Destination Port: {dst_port}")
+        packet_data['src_port'] = packet[UDP].sport
+        packet_data['dst_port'] = packet[UDP].dport
 
-        # DNS 데이터 분석
         if packet[UDP].dport == 53 or packet[UDP].sport == 53:
-            print("[INFO] DNS Data Detected")
             packet_data['sub_protocol'] = 'DNS'
             if packet.haslayer(DNS):
-                dns_query = packet[DNS].qd.qname.decode('utf-8') if packet[DNS].qd else "Unknown"
-                dns_query_type = packet[DNS].qd.qtype if packet[DNS].qd else "Unknown"
-                # 쿼리 타입 이름 할당
-                query_type_name = DNS_QUERY_TYPES.get(dns_query_type, "Unknown") if dns_query_type else "Unknown"
-                
-                packet_data['dns_query'] = dns_query
-                packet_data['dns_query_type'] = dns_query_type
-                print(f"[DNS] Query: {dns_query}")
-                print(f"[DNS] Query Type: {query_type_name}")
-
-    # 한 줄 띄워서 가독성 개선
-    print("\n" + "-" * 50 + "\n")
+                try:
+                    dns_query = packet[DNS].qd.qname.decode('utf-8') if packet[DNS].qd else "Unknown"
+                    dns_query_type = packet[DNS].qd.qtype if packet[DNS].qd else "Unknown"
+                    query_type_name = DNS_QUERY_TYPES.get(dns_query_type, "Unknown")
+                    packet_data['dns_query'] = dns_query
+                    packet_data['dns_query_type'] = query_type_name
+                except Exception as e:
+                    print(f"[ERROR] DNS Parsing Failed: {e}")
 
     return packet_data
 
@@ -149,27 +92,30 @@ def packet_callback(packet):
 def capture_packets(interface=None):
     packets = []
 
-    # 기본 인터페이스로 설정
     if interface is None:
-        interface = conf.iface  # scapy의 기본 네트워크 인터페이스
+        interface = conf.iface
 
     print(f"[INFO] Capturing packets on interface: {interface}")
 
     def packet_handler(packet):
         packet_data = packet_callback(packet)
-        if packet_data:
+        if packet_data:  # 패킷 데이터가 비어있지 않으면 저장
             packets.append(packet_data)
 
     try:
-        # 패킷 캡처 시작
         sniff(iface=interface, prn=packet_handler, store=0)
     except KeyboardInterrupt:
         print("\n[INFO] Packet capture stopped by user.")
+    except Exception as e:
+        print(f"[ERROR] Sniffing failed: {e}")
 
-    # JSON과 CSV 파일로 동시에 저장
-    save_to_json(packets, filename='captured_packets/captured_packets.json')
-    save_to_csv(packets, filename='captured_packets/captured_packets.csv')
-    print("Packets saved to captured_packets.json and captured_packets.csv")
+    # JSON과 CSV 파일로 저장
+    if packets:
+        save_to_json(packets, filename='captured_packets/captured_packets.json')
+        save_to_csv(packets, filename='captured_packets/captured_packets.csv')
+        print("[INFO] Packets saved successfully.")
+    else:
+        print("[WARNING] No packets captured.")
 
 if __name__ == "__main__":
     capture_packets()

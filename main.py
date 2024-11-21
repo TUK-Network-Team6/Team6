@@ -16,7 +16,9 @@ def main():
 
     elif choice == '2':
         print("\nStarting packet analysis...")
-        subprocess.run(["python3", "analyze.py"])  # 분석 실행
+        subprocess.run(["python3", "analyze.py"])  # 저장 파일 분석 실행
+        subprocess.run(["python3", "calculate.py"])  # 성능 지표 분석 실행
+        
 
     elif choice == '3':
         print("Exiting...")
