@@ -29,7 +29,7 @@ def calculate_http_response_times(packet_log):
         elif protocol == 'TCP' and 'http_data' in packet and 'HTTP' in packet['http_data']:
             # HTTP 응답 기록
             ack = packet.get('ack')
-            if ack in request_times:
+            if ack and ack in request_times:
                 response_time = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S') - request_times[ack]
                 response_times.append(response_time.total_seconds())
 
@@ -39,26 +39,37 @@ def calculate_http_response_times(packet_log):
 
 # TCP 연결 성공률 계산
 def calculate_tcp_success_rate(packet_log):
-    syn_count = 0
-    syn_ack_count = 0
+    syn_packets = set()  # SYN 요청 추적
+    ack_packets = set()  # ACK 응답 추적
 
     for packet in packet_log:
         protocol = packet.get('protocol')
         if protocol == 'TCP':
-            flags = packet.get('tcp_flags', '').split(', ')
+            flags = packet.get('tcp_flags', [])
+            if isinstance(flags, str):
+                flags = flags.split(', ')  # 문자열 처리
 
-            # SYN 요청 카운트
+            src_ip = packet.get('src_ip')
+            dst_ip = packet.get('dst_ip')
+            src_port = packet.get('src_port')
+            dst_port = packet.get('dst_port')
+
+            # SYN 요청 추적
             if 'SYN' in flags and 'ACK' not in flags:
-                syn_count += 1
-            
-            # SYN-ACK 응답 카운트
-            if 'SYN' in flags and 'ACK' in flags:
-                syn_ack_count += 1
+                syn_packets.add((src_ip, dst_ip, src_port, dst_port))
 
-    # 연결 성공률 계산
-    print(syn_ack_count, syn_count)
-    success_rate = (syn_ack_count / syn_count) * 100 if syn_count > 0 else 0
-    return round(success_rate, 2), syn_count, syn_ack_count
+            # ACK 응답 추적
+            if 'ACK' in flags and 'SYN' not in flags:
+                ack_packets.add((dst_ip, src_ip, dst_port, src_port))  # 반대 방향 매핑
+
+    # 성공적으로 매핑된 ACK 응답
+    matched_acks = len(syn_packets.intersection(ack_packets))
+    syn_count = len(syn_packets)
+
+    # TCP 성공률 계산
+    success_rate = (matched_acks / syn_count) * 100 if syn_count > 0 else 0
+
+    return round(success_rate, 2), syn_count, matched_acks
 
 # TCP 지연 시간 계산
 def calculate_tcp_delays(packet_log):
@@ -68,11 +79,13 @@ def calculate_tcp_delays(packet_log):
     for packet in packet_log:
         protocol = packet.get('protocol')
         if protocol == 'TCP':
-            flags = packet.get('tcp_flags', '')
-            if 'SYN' in flags:
-                seq = packet.get('seq')
-                if seq:
-                    syn_times[seq] = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S')
+            flags = packet.get('tcp_flags', [])
+            if isinstance(flags, str):
+                flags = flags.split(', ')
+
+            seq = packet.get('seq')
+            if 'SYN' in flags and seq:
+                syn_times[seq] = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S')
             elif 'SYN-ACK' in flags:
                 ack = packet.get('ack')
                 if ack in syn_times:
@@ -93,8 +106,10 @@ def calculate_udp_response_times(packet_log):
             if packet.get('dst_port') == 53:  # DNS 요청
                 request_times[packet.get('src_port')] = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S')
             elif packet.get('src_port') == 53:  # DNS 응답
-                response_time = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S') - request_times.get(packet.get('dst_port'), datetime.min)
-                response_times.append(response_time.total_seconds())
+                request_time = request_times.get(packet.get('dst_port'))
+                if request_time:
+                    response_time = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S') - request_time
+                    response_times.append(response_time.total_seconds())
 
     avg_response_time = sum(response_times) / len(response_times) if response_times else 0
     return avg_response_time, response_times
