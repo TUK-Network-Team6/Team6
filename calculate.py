@@ -15,26 +15,34 @@ def load_json(filename='captured_packets/captured_packets.json'):
 
 # HTTP 응답 시간 계산
 def calculate_http_response_times(packet_log):
-    request_times = {}
-    response_times = []
+    request_times = {}  # 요청 시각 저장 {key: timestamp}
+    response_times = []  # 응답 시간 저장
 
     for packet in packet_log:
         protocol = packet.get('protocol')
-        if protocol == 'TCP' and 'http_method' in packet:
-            # HTTP 요청 기록
-            seq = packet.get('seq')
-            if seq:
-                request_times[seq] = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S')
+        if protocol == 'TCP':
+            if 'http_method' in packet: # HTTP 요청
+                seq = packet.get('seq')
+                if seq:
+                    request_key = (packet['src_ip'], packet['dst_ip'], packet['src_port'], packet['dst_port'], seq)
+                    request_times[request_key] = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S')
 
-        elif protocol == 'TCP' and 'http_data' in packet and 'HTTP' in packet['http_data']:
-            # HTTP 응답 기록
-            ack = packet.get('ack')
-            if ack and ack in request_times:
-                response_time = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S') - request_times[ack]
-                response_times.append(response_time.total_seconds())
+            elif 'http_status' in packet:  # HTTP 응답
+                ack = packet.get('ack')
+                if ack:
+                    response_key = (packet['dst_ip'], packet['src_ip'], packet['dst_port'], packet['src_port'], ack)
 
-    # 평균 응답 시간 계산
+                    for response_key in request_times:
+                        if (
+                            response_key[:4] == request_key[:4] and  # src/dst IP와 Port가 일치
+                            abs(response_key[4] - request_key[4]) <= 100  # seq와 ack 간 오차 허용
+                        ):
+                            response_time = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S') - request_times[response_key]
+                            response_times.append(response_time.total_seconds())
+                            break
+
     avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+
     return avg_response_time, response_times
 
 # TCP 연결 성공률 계산

@@ -159,7 +159,7 @@ def capture_packets(interface=None):
             packets.append(packet_data)
 
     try:
-        sniff(iface=interface, filter="", prn=packet_handler, store=False)
+        sniff(iface=interface, filter="tcp", prn=packet_handler, store=False)
     except KeyboardInterrupt:
         print("\n[INFO] Packet capture stopped by user.")
     except Exception as e:
