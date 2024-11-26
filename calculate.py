@@ -110,14 +110,23 @@ def calculate_udp_response_times(packet_log):
 
     for packet in packet_log:
         protocol = packet.get('protocol')
+        timestamp = packet.get('timestamp', '')
+
+        try:
+            packet_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')  # 밀리초 포함 파싱
+        except ValueError:
+            packet_time = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')  # 초 단위 파싱
+
         if protocol == 'UDP':
             if packet.get('dst_port') == 53:  # DNS 요청
-                request_times[packet.get('src_port')] = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S')
+                request_times[packet.get('src_port')] = packet_time
             elif packet.get('src_port') == 53:  # DNS 응답
                 request_time = request_times.get(packet.get('dst_port'))
                 if request_time:
-                    response_time = datetime.strptime(packet.get('timestamp', ''), '%Y-%m-%d %H:%M:%S') - request_time
+                    response_time = packet_time - request_time
                     response_times.append(response_time.total_seconds())
+                else:
+                    print(f"[DEBUG] No matching request for response: {packet}")
 
     avg_response_time = sum(response_times) / len(response_times) if response_times else 0
     return avg_response_time, response_times
@@ -148,7 +157,7 @@ def analyze_packets():
 
     # UDP 응답 시간
     avg_udp_time, _ = calculate_udp_response_times(packets)
-    print(f"Average UDP Response Time: {avg_udp_time:.2f} seconds")
+    print(f"Average UDP Response Time: {avg_udp_time:.3f} seconds")
 
 if __name__ == "__main__":
     analyze_packets()

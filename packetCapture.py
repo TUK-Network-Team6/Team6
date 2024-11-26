@@ -92,29 +92,29 @@ def packet_callback(packet):
                     print("[DEBUG] HTTP Status Line Parsing Failed")
 
 
-    # SMTP 데이터 분석
-    if packet[TCP].dport in [25, 465, 587] or packet[TCP].sport in [25, 465, 587]:
-        print("[INFO] SMTP Data Detected")
-        packet_data['sub_protocol'] = 'SMTP'
         # SMTP 데이터 분석
-        if packet.haslayer(Raw):
-            smtp_data = packet[Raw].load.decode(errors='ignore').strip()  # SMTP 데이터 불러오기
-            packet_data['smtp_data'] = smtp_data  # 원본 데이터 저장
-            mail_from = None
-            rcpt_to = None
+        if packet[TCP].dport in [25, 465, 587] or packet[TCP].sport in [25, 465, 587]:
+            print("[INFO] SMTP Data Detected")
+            packet_data['sub_protocol'] = 'SMTP'
+            # SMTP 데이터 분석
+            if packet.haslayer(Raw):
+                smtp_data = packet[Raw].load.decode(errors='ignore').strip()  # SMTP 데이터 불러오기
+                packet_data['smtp_data'] = smtp_data  # 원본 데이터 저장
+                mail_from = None
+                rcpt_to = None
 
-            # SMTP 명령 분석
-            lines = smtp_data.splitlines()  # 줄 단위로 분리
-            for line in lines:
-                if line.startswith("MAIL FROM:"):
-                    mail_from = line.split("MAIL FROM:", 1)[1].strip()
-                    packet_data['smtp_mail_from'] = mail_from
-                elif line.startswith("RCPT TO:"):
-                    rcpt_to = line.split("RCPT TO:", 1)[1].strip()
-                    packet_data['smtp_rcpt_to'] = rcpt_to
-                else:
-                    # 나머지 데이터 출력
-                    print(f"[SMTP] Data: {line}")
+                # SMTP 명령 분석
+                lines = smtp_data.splitlines()  # 줄 단위로 분리
+                for line in lines:
+                    if line.startswith("MAIL FROM:"):
+                        mail_from = line.split("MAIL FROM:", 1)[1].strip()
+                        packet_data['smtp_mail_from'] = mail_from
+                    elif line.startswith("RCPT TO:"):
+                        rcpt_to = line.split("RCPT TO:", 1)[1].strip()
+                        packet_data['smtp_rcpt_to'] = rcpt_to
+                    else:
+                        # 나머지 데이터 출력
+                        print(f"[SMTP] Data: {line}")
 
     if packet.haslayer(UDP):
         print("[INFO] UDP Packet Detected")
@@ -159,7 +159,7 @@ def capture_packets(interface=None):
             packets.append(packet_data)
 
     try:
-        sniff(iface=interface, filter="tcp", prn=packet_handler, store=False)
+        sniff(iface=interface, filter="", prn=packet_handler, store=False)
     except KeyboardInterrupt:
         print("\n[INFO] Packet capture stopped by user.")
     except Exception as e:
