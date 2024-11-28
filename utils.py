@@ -14,24 +14,67 @@ ALL_FIELDNAMES = [
 
 # JSON 파일 저장 함수
 def save_to_json(packet_list, filename='captured_packets/captured_packets.json'):
+    """
+    JSON 데이터를 임시 파일로 저장한 후 원본 파일로 교체하여 손상 방지
+    """
     # Ensure the directory exists
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
-    # 파일이 존재하면 기존 데이터를 읽어와서 추가
-    existing_data = []
-    if os.path.exists(filename):
+    temp_filename = filename + ".tmp"
+
+    try:
+        # 기존 데이터를 복구 또는 읽기
+        existing_data = []
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as json_file:
+                try:
+                    existing_data = json.load(json_file)
+                except json.JSONDecodeError:
+                    print("[ERROR] JSON file is corrupted. Attempting recovery...")
+                    existing_data = recover_json(filename) or []
+
+        # Combine new and existing data
+        combined_data = existing_data + packet_list
+
+        # Save to a temporary file
+        with open(temp_filename, 'w', encoding='utf-8') as temp_file:
+            json.dump(combined_data, temp_file, indent=4, ensure_ascii=False)
+
+        # Replace the original file with the temporary file
+        os.replace(temp_filename, filename)
+        print(f"[INFO] Successfully saved JSON to {filename}")
+
+    except Exception as e:
+        print(f"[ERROR] Failed to save JSON: {e}")
+        # Clean up temporary file if an error occurs
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+
+# JSON 파일 복구 함수
+def recover_json(filename):
+    """
+    손상된 JSON 파일을 복구하는 함수
+    """
+    try:
         with open(filename, 'r', encoding='utf-8') as json_file:
-            existing_data = json.load(json_file)
+            content = json_file.read()
 
-    # 새 데이터를 기존 데이터에 추가
-    combined_data = existing_data + packet_list
+        # Attempt to fix by wrapping in a valid array
+        content = content.strip()
+        if not content.endswith("]"):
+            content += "]"
 
-    # 저장
-    with open(filename, 'w', encoding='utf-8') as json_file:
-        json.dump(combined_data, json_file, indent=4, ensure_ascii=False)
+        return json.loads(content)
+
+    except Exception as e:
+        print(f"[ERROR] Failed to recover JSON: {e}")
+        return None
 
 # CSV 파일 저장 함수
 def save_to_csv(packet_list, filename='captured_packets/captured_packets.csv'):
+    """
+    패킷 데이터를 CSV 파일에 저장
+    """
     # Ensure the directory exists
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
@@ -48,3 +91,16 @@ def save_to_csv(packet_list, filename='captured_packets/captured_packets.csv'):
         # 새로운 데이터를 추가
         for packet in packet_list:
             writer.writerow({field: packet.get(field, "") for field in ALL_FIELDNAMES})
+
+# 테스트
+if __name__ == "__main__":
+    test_data = [
+        {"timestamp": "2024-11-18 17:29:20", "protocol": "TCP", "src_ip": "192.168.43.32", "dst_ip": "210.93.48.59", "src_port": 53143, "dst_port": 443, "seq": 2139928379, "ack": 14072519},
+        {"timestamp": "2024-11-18 17:29:21", "protocol": "UDP", "src_ip": "192.168.43.32", "dst_ip": "8.8.8.8", "src_port": 5353, "dst_port": 53, "dns_query": "example.com", "dns_query_type": 1},
+    ]
+
+    # JSON 저장 테스트
+    save_to_json_safe(test_data)
+
+    # CSV 저장 테스트
+    save_to_csv(test_data)
