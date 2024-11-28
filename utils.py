@@ -17,7 +17,7 @@ def save_to_json(packet_list, filename='captured_packets/captured_packets.json')
     """
     JSON 데이터를 임시 파일로 저장한 후 원본 파일로 교체하여 손상 방지
     """
-    # Ensure the directory exists
+    # 디렉토리 존재 확인
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     temp_filename = filename + ".tmp"
@@ -33,20 +33,20 @@ def save_to_json(packet_list, filename='captured_packets/captured_packets.json')
                     print("[ERROR] JSON file is corrupted. Attempting recovery...")
                     existing_data = recover_json(filename) or []
 
-        # Combine new and existing data
+        # 존재 데이터 합치기
         combined_data = existing_data + packet_list
 
-        # Save to a temporary file
+        # 임시 파일 저장
         with open(temp_filename, 'w', encoding='utf-8') as temp_file:
             json.dump(combined_data, temp_file, indent=4, ensure_ascii=False)
 
-        # Replace the original file with the temporary file
+        # 임시 파일로 기존 파일 교체
         os.replace(temp_filename, filename)
         print(f"[INFO] Successfully saved JSON to {filename}")
 
     except Exception as e:
         print(f"[ERROR] Failed to save JSON: {e}")
-        # Clean up temporary file if an error occurs
+        # 에러가 일어나면 임시 파일을 삭제
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
@@ -59,7 +59,7 @@ def recover_json(filename):
         with open(filename, 'r', encoding='utf-8') as json_file:
             content = json_file.read()
 
-        # Attempt to fix by wrapping in a valid array
+        # 열 감싸 복구 시도
         content = content.strip()
         if not content.endswith("]"):
             content += "]"
@@ -75,7 +75,7 @@ def save_to_csv(packet_list, filename='captured_packets/captured_packets.csv'):
     """
     패킷 데이터를 CSV 파일에 저장
     """
-    # Ensure the directory exists
+    # 디렉토리 존재 확인
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     # CSV 파일이 존재하는지 확인

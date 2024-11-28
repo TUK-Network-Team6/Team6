@@ -8,7 +8,7 @@
 Team6/
 │
 ├── packetCapture.py   # 실시간 패킷 캡처 및 저장 기능
-├── analyze.py         # 저장된 파일 분석 기능
+├── calculate.py       # 저장된 파일 분석 기능
 ├── utils.py           # 공통 파일 저장 함수 및 유틸리티
 └── captured_packets/  # 패킷 저장 폴더 (json, csv)
 ```
@@ -18,6 +18,7 @@ Team6/
 ### **2. 시작 가이드**
 
 #### **필요 사항**
+- ubuntu 22.04.3 기준
 - Python 3.x 설치 (pip install python3)
 - `scapy` 라이브러리 설치:
   ```bash

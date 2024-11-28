@@ -66,7 +66,7 @@ def packet_callback(packet):
             if 'HTTP' in raw_data:
                 print("[INFO] HTTP Packet Detected")
                 packet_data['http_data'] = raw_data
-                if raw_data.startswith(('GET', 'POST')):
+                if raw_data.startswith(('GET', 'POST', 'PUT', 'DELETE', 'HEAD')):
                     try:
                         request_line = raw_data.splitlines()[0]
                         method, path, version = request_line.split()
